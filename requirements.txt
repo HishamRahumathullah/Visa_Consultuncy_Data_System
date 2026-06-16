@@ -1,6 +1,8 @@
 Django>=5.0,<6.0
-fpdf2
-django-simple-history
-psycopg2-binary
-django-filter
-gunicorn
+fpdf2>=2.7.0
+django-simple-history>=3.4.0
+psycopg2-binary>=2.9.0
+django-filter>=23.0
+gunicorn>=21.0
+Pillow>=10.0.0
+python-dotenv>=1.0.0
