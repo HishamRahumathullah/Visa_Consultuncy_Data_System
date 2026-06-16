@@ -1,7 +1,25 @@
-*.py[cod]
-__pycache__/
-*.so
+# Environment
 .env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+
+# Django
 db.sqlite3
-media/
 static/
+uploads/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+EOF
