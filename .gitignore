@@ -1,26 +1,31 @@
+# Django
+*.log
+*.pot
+*.pyc
+__pycache__/
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
 # Environment
 .env
+.env.local
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.venv/
+# Virtual environments
 venv/
-
-# Django
-db.sqlite3
-static/
-uploads/
+env/
+.venv/
 
 # IDE
 .vscode/
 .idea/
 *.swp
-backup.sh
+*.swo
 
 # OS
 .DS_Store
 Thumbs.db
-EOF
+
+# Railway / Heroku
+*.dump
