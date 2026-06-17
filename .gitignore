@@ -18,6 +18,7 @@ uploads/
 .vscode/
 .idea/
 *.swp
+backup.sh
 
 # OS
 .DS_Store
