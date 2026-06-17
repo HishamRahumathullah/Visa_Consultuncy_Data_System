@@ -3,6 +3,7 @@ Django settings for visa_consultancy project.
 """
 
 import os
+import dj_database_url
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -61,7 +62,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # ADD THIS - serves static files
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -90,13 +91,14 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "visa_consultancy.wsgi.application"
 
-# Database: Use Railway PostgreSQL if DATABASE_URL is set, otherwise fallback
+# Database configuration
+# Priority: 1) DATABASE_URL (Railway), 2) Individual DB_* vars, 3) SQLite fallback
 DATABASE_URL = os.environ.get("DATABASE_URL")
+
 if DATABASE_URL:
-    import dj_database_url
     DATABASES = {
-        "default": dj_database_url.parse(
-            DATABASE_URL,
+        "default": dj_database_url.config(
+            default=DATABASE_URL,
             conn_max_age=600,
             conn_health_checks=True,
         )
