@@ -9,12 +9,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# BASE_DIR MUST be defined first
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get(
     "DJANGO_SECRET_KEY", "django-insecure-fallback-for-dev-only"
 )
-DEBUG = os.environ.get("DJANGO_DEBUG", "True") == "True"
+DEBUG = os.environ.get("DJANGO_DEBUG", "False") == "True"  # Default to False
 
 # Railway automatically provides a domain, but we also support custom domains
 RAILWAY_DOMAIN = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
@@ -31,11 +32,19 @@ if RAILWAY_DOMAIN:
 
 # Always allow localhost for development
 ALLOWED_HOSTS.extend(["localhost", "127.0.0.1", ".railway.app"])
+# Remove empty strings and duplicates
+ALLOWED_HOSTS = list(dict.fromkeys([h.strip() for h in ALLOWED_HOSTS if h.strip()]))
 
 # CSRF trusted origins for Railway HTTPS
 CSRF_TRUSTED_ORIGINS = [
-    f"https://{host}" for host in ALLOWED_HOSTS if host and "*" not in host
+    f"https://{host}"
+    for host in ALLOWED_HOSTS
+    if host and "*" not in host and not host.startswith(".")
 ]
+# Also add wildcard origins for Railway subdomains
+if any(".railway.app" in h for h in ALLOWED_HOSTS):
+    CSRF_TRUSTED_ORIGINS.append("https://*.railway.app")
+    CSRF_TRUSTED_ORIGINS.append("https://*.up.railway.app")
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
@@ -139,6 +148,8 @@ USE_TZ = True
 # Static files - WhiteNoise configuration
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# Ensure directory exists (now safe because BASE_DIR is defined above)
+os.makedirs(STATIC_ROOT, exist_ok=True)
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # Media files
