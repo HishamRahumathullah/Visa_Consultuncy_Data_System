@@ -14,11 +14,27 @@ SECRET_KEY = os.environ.get(
     "DJANGO_SECRET_KEY", "django-insecure-fallback-for-dev-only"
 )
 DEBUG = os.environ.get("DJANGO_DEBUG", "True") == "True"
+
+# Railway automatically provides a domain, but we also support custom domains
+RAILWAY_DOMAIN = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
 ALLOWED_HOSTS = (
     os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
     if os.environ.get("DJANGO_ALLOWED_HOSTS")
     else []
 )
+
+# Add Railway domains automatically
+if RAILWAY_DOMAIN:
+    ALLOWED_HOSTS.append(RAILWAY_DOMAIN)
+    ALLOWED_HOSTS.append(f"*.{RAILWAY_DOMAIN.split('.', 1)[-1]}")
+
+# Always allow localhost for development
+ALLOWED_HOSTS.extend(["localhost", "127.0.0.1", ".railway.app"])
+
+# CSRF trusted origins for Railway HTTPS
+CSRF_TRUSTED_ORIGINS = [
+    f"https://{host}" for host in ALLOWED_HOSTS if host and "*" not in host
+]
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
@@ -45,6 +61,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # ADD THIS - serves static files
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -59,8 +76,8 @@ ROOT_URLCONF = "visa_consultancy.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],  # You can add project-level templates here if needed
-        "APP_DIRS": True,  # This must be True for admin templates to work
+        "DIRS": [],
+        "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
                 "django.template.context_processors.request",
@@ -73,8 +90,18 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "visa_consultancy.wsgi.application"
 
-# FIX: Use DB_NAME to detect PostgreSQL config instead of misleading DATABASE_URL check
-if os.environ.get("DB_NAME"):
+# Database: Use Railway PostgreSQL if DATABASE_URL is set, otherwise fallback
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if DATABASE_URL:
+    import dj_database_url
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    }
+elif os.environ.get("DB_NAME"):
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -107,8 +134,12 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
+# Static files - WhiteNoise configuration
 STATIC_URL = "static/"
-STATIC_ROOT = BASE_DIR / "static"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# Media files
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "uploads"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
