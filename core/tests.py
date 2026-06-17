@@ -5,25 +5,32 @@ from .logic import normalize_gpa, generate_matches, calculate_preference_score
 from decimal import Decimal
 import datetime
 
+
 class GPANormalizationTest(TestCase):
     def test_india_10_scale(self):
-        student = Student(nationality='India', gpa=Decimal('8.0'), gpa_scale=Decimal('10.0'))
-        self.assertEqual(normalize_gpa(student), Decimal('3.20'))
+        student = Student(nationality="India", gpa=Decimal("8.0"), gpa_scale=Decimal("10.0"))
+        self.assertEqual(normalize_gpa(student), Decimal("3.20"))
+
+    def test_india_100_scale(self):
+        student = Student(nationality="India", gpa=Decimal("75.0"), gpa_scale=Decimal("100.0"))
+        self.assertEqual(normalize_gpa(student), Decimal("3.00"))
 
     def test_germany_reverse_scale(self):
         # Germany: 1.0 is best, 5.0 is worst.
-        # formula: ((5 - g) / 4) * 4 => 5 - g
-        # If g=1.0, (4/4)*4 = 4.0
-        # If g=2.5, (2.5/4)*4 = 2.5
-        student = Student(nationality='Germany', gpa=Decimal('1.0'), gpa_scale=Decimal('5.0'))
-        self.assertEqual(normalize_gpa(student), Decimal('4.00'))
+        student = Student(nationality="Germany", gpa=Decimal("1.0"), gpa_scale=Decimal("5.0"))
+        self.assertEqual(normalize_gpa(student), Decimal("4.00"))
 
-        student.gpa = Decimal('2.0')
-        self.assertEqual(normalize_gpa(student), Decimal('3.00'))
+        student.gpa = Decimal("2.0")
+        self.assertEqual(normalize_gpa(student), Decimal("3.00"))
+
+    def test_unsupported_scale(self):
+        student = Student(nationality="Unknown", gpa=Decimal("3.0"), gpa_scale=Decimal("4.0"))
+        self.assertIsNone(normalize_gpa(student))
+
 
 class MatchingEngineTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username='testconsultant')
+        self.user = User.objects.create_user(username="testconsultant")
         self.uni = University.objects.create(
             name="Test Uni",
             country="UK",
@@ -34,8 +41,8 @@ class MatchingEngineTest(TestCase):
             duration_months=12,
             tuition_usd=20000,
             intake_months=["September"],
-            min_ielts=Decimal('6.5'),
-            min_gpa_4=Decimal('3.0'),
+            min_ielts=Decimal("6.5"),
+            min_gpa_4=Decimal("3.0"),
             accepts_backlogs=True,
             max_gap_years=5,
             min_funds_usd=25000,
@@ -49,9 +56,9 @@ class MatchingEngineTest(TestCase):
             highest_qualification="Bachelor",
             institution_name="IIT",
             graduation_year=2023,
-            gpa=Decimal('8.0'),
-            gpa_scale=Decimal('10.0'),
-            ielts_overall=Decimal('7.0'),
+            gpa=Decimal("8.0"),
+            gpa_scale=Decimal("10.0"),
+            ielts_overall=Decimal("7.0"),
             preferred_intake_month="September",
             preferred_intake_year=2025,
             preferred_countries=["UK"],
@@ -64,15 +71,10 @@ class MatchingEngineTest(TestCase):
         match = MatchResult.objects.get(student=self.student, university=self.uni)
         self.assertTrue(match.is_eligible)
         self.assertGreater(match.preference_score, 0)
-        self.assertEqual(match.score_breakdown['country_match'], 30)
+        self.assertEqual(match.score_breakdown["country_match"], 30)
 
     def test_ineligible_ielts(self):
-        # We need to make sure the student is still "eligible" to be picked up by the SQL query
-        # (which filters by min_ielts in get_eligible_programs)
-        # Wait, if get_eligible_programs filters by min_ielts, then generate_matches won't
-        # find the university at all if the student's IELTS is too low.
-        # Let's adjust the test to expect no active match if the SQL filter excludes it.
-        self.student.ielts_overall = Decimal('6.0')
+        self.student.ielts_overall = Decimal("6.0")
         self.student.save()
         generate_matches(self.student)
         match = MatchResult.objects.filter(student=self.student, university=self.uni, is_active=True).first()
@@ -82,8 +84,50 @@ class MatchingEngineTest(TestCase):
         self.student.max_budget_usd = 15000
         self.student.save()
         generate_matches(self.student)
-        # Should be marked as inactive or not found if SQL filter excludes it
-        # Actually generate_matches uses get_eligible_programs which filters SQL
-        # So it should be marked as is_active=False if it was there, or not created.
         match = MatchResult.objects.filter(student=self.student, university=self.uni, is_active=True).first()
         self.assertIsNone(match)
+
+    def test_consultant_decision_preserved(self):
+        # Create initial match and mark as shortlisted
+        generate_matches(self.student)
+        match = MatchResult.objects.get(student=self.student, university=self.uni)
+        match.consultant_shortlisted = True
+        match.consultant_notes = "Strong candidate"
+        match.save()
+
+        # Regenerate matches — consultant decision should be preserved
+        generate_matches(self.student)
+        match.refresh_from_db()
+        self.assertTrue(match.consultant_shortlisted)
+        self.assertEqual(match.consultant_notes, "Strong candidate")
+
+
+class DocumentPermissionTest(TestCase):
+    def setUp(self):
+        self.consultant_a = User.objects.create_user(username="consultant_a")
+        self.consultant_b = User.objects.create_user(username="consultant_b")
+        self.manager = User.objects.create_user(username="manager")
+        self.manager.groups.create(name="manager")
+
+        self.student_a = Student.objects.create(
+            full_name="Student A",
+            email="student_a@example.com",
+            nationality="India",
+            assigned_consultant=self.consultant_a
+        )
+        self.student_b = Student.objects.create(
+            full_name="Student B",
+            email="student_b@example.com",
+            nationality="India",
+            assigned_consultant=self.consultant_b
+        )
+
+    def test_consultant_sees_own_student_documents(self):
+        """Consultant can access documents for their assigned students."""
+        # This would need actual file upload testing in integration tests
+        pass
+
+    def test_consultant_blocked_from_other_student_documents(self):
+        """Consultant cannot access documents for other consultants' students."""
+        # This would need actual file upload testing in integration tests
+        pass

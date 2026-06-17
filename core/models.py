@@ -6,16 +6,17 @@ from simple_history.models import HistoricalRecords
 import json
 
 MONTH_CHOICES = [
-    ('January', 'January'), ('February', 'February'), ('March', 'March'),
-    ('April', 'April'), ('May', 'May'), ('June', 'June'),
-    ('July', 'July'), ('August', 'August'), ('September', 'September'),
-    ('October', 'October'), ('November', 'November'), ('December', 'December'),
+    ("January", "January"), ("February", "February"), ("March", "March"),
+    ("April", "April"), ("May", "May"), ("June", "June"),
+    ("July", "July"), ("August", "August"), ("September", "September"),
+    ("October", "October"), ("November", "November"), ("December", "December"),
 ]
+
 
 class Student(models.Model):
     # Identity
     full_name = models.CharField(max_length=200)
-    email = models.EmailField()
+    email = models.EmailField(unique=True)
     phone = models.CharField(max_length=20)
     nationality = models.CharField(max_length=100)
 
@@ -56,17 +57,17 @@ class Student(models.Model):
 
     # Pipeline
     STAGE_CHOICES = [
-        ('lead', 'New Lead'),
-        ('docs_pending', 'Documents Pending'),
-        ('profile_ready', 'Profile Ready'),
-        ('shortlisted', 'University Shortlisted'),
-        ('applied', 'Applications Submitted'),
-        ('offer_received', 'Offer Received'),
-        ('visa_applied', 'Visa Applied'),
-        ('visa_granted', 'Visa Granted'),
-        ('visa_refused', 'Visa Refused'),
+        ("lead", "New Lead"),
+        ("docs_pending", "Documents Pending"),
+        ("profile_ready", "Profile Ready"),
+        ("shortlisted", "University Shortlisted"),
+        ("applied", "Applications Submitted"),
+        ("offer_received", "Offer Received"),
+        ("visa_applied", "Visa Applied"),
+        ("visa_granted", "Visa Granted"),
+        ("visa_refused", "Visa Refused"),
     ]
-    stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default='lead')
+    stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default="lead")
 
     # Consent tracking (GDPR/PDPL)
     consent_storage = models.BooleanField(default=False)
@@ -85,10 +86,13 @@ class Student(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['stage', 'assigned_consultant']),
-            models.Index(fields=['preferred_intake_month', 'preferred_intake_year']),
-            models.Index(fields=['nationality']),
+            models.Index(fields=["stage", "assigned_consultant"]),
+            models.Index(fields=["preferred_intake_month", "preferred_intake_year"]),
+            models.Index(fields=["nationality"]),
         ]
+
+    def __str__(self):
+        return f"{self.full_name} ({self.nationality})"
 
     def clean(self):
         # Sanity checks — data quality guards, not business rules
@@ -106,12 +110,13 @@ class Student(models.Model):
         # Auto-normalize GPA
         from .logic import normalize_gpa
         if self.normalized_gpa_4 is None:
-             self.normalized_gpa_4 = normalize_gpa(self)
+            self.normalized_gpa_4 = normalize_gpa(self)
         super().save(*args, **kwargs)
 
     @property
     def preferred_intake_display(self):
         return f"{self.preferred_intake_month} {self.preferred_intake_year}"
+
 
 class University(models.Model):
     name = models.CharField(max_length=200)
@@ -140,7 +145,7 @@ class University(models.Model):
     ranking_qs = models.PositiveIntegerField(null=True, blank=True)
     accreditation = models.CharField(max_length=200, blank=True)
     last_verified_date = models.DateField()
-    data_source = models.CharField(max_length=50, default='manual')
+    data_source = models.CharField(max_length=50, default="manual")
 
     is_active = models.BooleanField(default=True)
 
@@ -149,22 +154,26 @@ class University(models.Model):
     class Meta:
         verbose_name_plural = "Universities"
         indexes = [
-            models.Index(fields=['country', 'is_active']),
-            models.Index(fields=['min_ielts', 'tuition_usd']),
-            models.Index(fields=['degree_level']),
-            GinIndex(fields=['intake_months']),
+            models.Index(fields=["country", "is_active"]),
+            models.Index(fields=["min_ielts", "tuition_usd"]),
+            models.Index(fields=["degree_level"]),
+            GinIndex(fields=["intake_months"]),
         ]
+
+    def __str__(self):
+        return f"{self.name} — {self.program_name}"
 
     @property
     def data_freshness(self):
         from django.utils import timezone
         age = (timezone.now().date() - self.last_verified_date).days
         if age > 90:
-            return 'stale', age
-        return 'fresh', age
+            return "stale", age
+        return "fresh", age
+
 
 class MatchResult(models.Model):
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='matches')
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="matches")
     university = models.ForeignKey(University, on_delete=models.CASCADE)
 
     is_eligible = models.BooleanField()
@@ -184,43 +193,47 @@ class MatchResult(models.Model):
     history = HistoricalRecords()
 
     class Meta:
-        unique_together = ['student', 'university']
+        unique_together = ["student", "university"]
         indexes = [
-            models.Index(fields=['student', 'is_active', 'preference_score']),
+            models.Index(fields=["student", "is_active", "preference_score"]),
         ]
 
     def __str__(self):
         return f"{self.student.full_name} <> {self.university.name}: {self.preference_score}"
 
+
 def document_path(instance, filename):
-    return f"uploads/{instance.student.id}/{instance.doc_type}/{filename}"
+    """Generate upload path for student documents."""
+    student_id = instance.student_id or getattr(instance.student, "id", "unknown")
+    return f"uploads/{student_id}/{instance.doc_type}/{filename}"
+
 
 class Document(models.Model):
     DOC_TYPES = [
-        ('passport', 'Passport'),
-        ('transcript', 'Academic Transcript'),
-        ('ielts', 'IELTS Scorecard'),
-        ('bank_statement', 'Bank Statement'),
-        ('sop', 'Statement of Purpose'),
-        ('lor', 'Letter of Recommendation'),
-        ('resume', 'Resume/CV'),
-        ('offer_letter', 'University Offer Letter'),
-        ('visa_doc', 'Visa Document'),
+        ("passport", "Passport"),
+        ("transcript", "Academic Transcript"),
+        ("ielts", "IELTS Scorecard"),
+        ("bank_statement", "Bank Statement"),
+        ("sop", "Statement of Purpose"),
+        ("lor", "Letter of Recommendation"),
+        ("resume", "Resume/CV"),
+        ("offer_letter", "University Offer Letter"),
+        ("visa_doc", "Visa Document"),
     ]
 
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='documents')
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="documents")
     doc_type = models.CharField(max_length=20, choices=DOC_TYPES)
     file = models.FileField(upload_to=document_path)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     # Honest review workflow — consultant decides, system tracks
     REVIEW_CHOICES = [
-        ('pending', 'Pending Review'),
-        ('verified', 'Verified Authentic'),
-        ('suspicious', 'Suspicious — Request Original'),
-        ('rejected', 'Rejected'),
+        ("pending", "Pending Review"),
+        ("verified", "Verified Authentic"),
+        ("suspicious", "Suspicious — Request Original"),
+        ("rejected", "Rejected"),
     ]
-    review_status = models.CharField(max_length=20, choices=REVIEW_CHOICES, default='pending')
+    review_status = models.CharField(max_length=20, choices=REVIEW_CHOICES, default="pending")
     reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
     review_notes = models.TextField(blank=True)
@@ -233,5 +246,15 @@ class Document(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['student', 'doc_type', 'review_status']),
+            models.Index(fields=["student", "doc_type", "review_status"]),
         ]
+
+    def __str__(self):
+        return f"{self.student.full_name} — {self.get_doc_type_display()}"
+
+    def save(self, *args, **kwargs):
+        # Auto-populate file metadata
+        if self.file:
+            self.file_size_kb = self.file.size // 1024
+            self.file_extension = self.file.name.split(".")[-1].lower() if "." in self.file.name else ""
+        super().save(*args, **kwargs)
