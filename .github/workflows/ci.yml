@@ -1,0 +1,59 @@
+name: Django CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: visa_consultancy_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/visa_consultancy_test
+          DJANGO_SECRET_KEY: test-secret-key-for-ci
+        run: python manage.py migrate
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/visa_consultancy_test
+          DJANGO_SECRET_KEY: test-secret-key-for-ci
+        run: python manage.py test --verbosity=2
+
+      - name: Check for missing migrations
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/visa_consultancy_test
+          DJANGO_SECRET_KEY: test-secret-key-for-ci
+        run: python manage.py makemigrations --check --dry-run
