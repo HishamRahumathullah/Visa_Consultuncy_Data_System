@@ -1,0 +1,39 @@
+name: Deploy to Railway
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        id: deploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway up --service visa-consultancy
+          echo "url=$(railway domain --service visa-consultancy)" >> $GITHUB_OUTPUT
+
+      - name: Run migrations on Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway run --service visa-consultancy python manage.py migrate
+
+      - name: Health check
+        run: |
+          sleep 15
+          curl --fail https://${{ steps.deploy.outputs.url }}/admin/login/ || exit 1
